@@ -2,15 +2,8 @@
 TreeInterpreter
 ===============================
 
-.. image:: https://img.shields.io/travis/andosa/treeinterpreter.svg
-        :target: https://travis-ci.org/andosa/treeinterpreter
-
-.. image:: https://img.shields.io/pypi/v/treeinterpreter.svg
-        :target: https://pypi.python.org/pypi/treeinterpreter
-
-
 Package for interpreting scikit-learn's decision tree and random forest predictions.
-Allows decomposing each prediction into bias and feature contribution components as described in http://blog.datadive.net/interpreting-random-forests/. For a dataset with ``n`` features, each prediction on the dataset is decomposed  via ``prediction = bias + feature_1_contribution + ... + feature_n_contribution``.
+Allows decomposing each prediction into bias and feature contribution components as described in http://blog.datadive.net/interpreting-random-forests/. For a dataset with ``n`` features, each prediction on the dataset is decomposed  as ``prediction = bias + feature_1_contribution + ... + feature_n_contribution``.
 
 It works on scikit-learn's
 
