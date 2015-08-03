@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import RandomForestClassifier
 
 
-def get_tree_paths(tree, node_id, parent=None, depth=0):
+def get_tree_paths(tree, node_id, depth=0):
     """
     Returns all paths through the tree as list of node_ids
     """
@@ -21,15 +21,13 @@ def get_tree_paths(tree, node_id, parent=None, depth=0):
     right_child = tree.children_right[node_id]
 
     if left_child != _tree.TREE_LEAF:
-        left_paths = get_tree_paths(tree, left_child, parent=node_id,
-                                    depth=depth + 1)
-        right_paths = get_tree_paths(tree, right_child,  parent=node_id,
-                                     depth=depth + 1)
+        left_paths = get_tree_paths(tree, left_child, depth=depth + 1)
+        right_paths = get_tree_paths(tree, right_child, depth=depth + 1)
 
-        for p in left_paths:
-            p.append(node_id)
-        for p in right_paths:
-            p.append(node_id)
+        for path in left_paths:
+            path.append(node_id)
+        for path in right_paths:
+            path.append(node_id)
         paths = left_paths + right_paths
     else:
         paths = [[node_id]]
@@ -63,7 +61,7 @@ def predict_tree(model, X):
             contributions[row] = contribs
             direct_prediction = model.tree_.value.take(
                 leaves, axis=0, mode='clip').reshape(X.shape[0], 1)[:, 0]
-    elif type(model) == DecisionTreeClassifier:        
+    elif type(model) == DecisionTreeClassifier:
         # remove the single-dimensional inner arrays
         values = model.tree_.value.squeeze()
         # scikit stores category counts, we turn them into probabilities
@@ -97,6 +95,19 @@ def predict_tree(model, X):
 
 
 def predict_forest(model, X):
+    """ Returns a tripe (prediction, bias, contributions)
+    Parameters
+    ----------
+    X : array-like, shape = (n_samples, n_features)
+        Test samples.
+    model : RandomForestRegressor or RandomForestClassifier
+        Sckit learn forest model on which the prediction should be decomposed
+    
+    Returns
+    -------
+    decomposed prediction : tuple
+        
+    """
     biases = []
     contributions = []
     predictions = []
@@ -107,3 +118,24 @@ def predict_forest(model, X):
         predictions.append(pred)
     return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
             np.mean(contributions, axis=0))
+
+            
+def predict(model, X):
+    pass
+            
+if __name__ == "__main__":
+    # test
+    from sklearn.datasets import load_iris
+    iris = load_iris()
+    idx = range(len(iris.data))
+    np.random.shuffle(idx)
+    X = iris.data[idx]
+    Y = iris.target[idx]
+    dt = RandomForestClassifier(max_depth=3)
+    dt.fit(X[:len(X)/2], Y[:len(X)/2])
+    testX = X[len(X)/2:len(X)/2+5]
+    base_prediction = dt.predict_proba(testX)
+    pred, bias, contrib = predict_forest(dt, testX)
+
+    assert(np.allclose(base_prediction, pred))
+    assert(np.allclose(pred, bias + np.sum(contrib, axis=1)))    
