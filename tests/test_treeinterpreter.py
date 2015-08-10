@@ -8,12 +8,7 @@ test_treeinterpreter
 Tests for `treeinterpreter` module.
 """
 
-import sys
-sys.path.insert(0, r'c:\projects\scikit-learn-master\scikit-learn\build\lib.win32-2.7')
-sys.path.insert(0, r'c:\projects\scikit-learn-master\build\lib.win-amd64-2.7')
-
 import unittest
-
 from treeinterpreter import treeinterpreter
 from sklearn.datasets import load_boston, load_iris
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -36,7 +31,7 @@ class TestTreeinterpreter(unittest.TestCase):
         dt.fit(X[:len(X)/2], Y[:len(X)/2])
 
         base_prediction = dt.predict(testX)
-        pred, bias, contrib = treeinterpreter.predict_tree(dt, testX)
+        pred, bias, contrib = treeinterpreter.predict(dt, testX)
         self.assertTrue(np.allclose(base_prediction, pred))
         self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
         
@@ -48,7 +43,7 @@ class TestTreeinterpreter(unittest.TestCase):
         dt.fit(X[:len(X)/2], Y[:len(X)/2])
         testX = X[len(X)/2:len(X)/2+1]
         base_prediction = dt.predict_proba(testX)
-        pred, bias, contrib = treeinterpreter.predict_tree(dt, testX)
+        pred, bias, contrib = treeinterpreter.predict(dt, testX)
         
         self.assertTrue(np.allclose(base_prediction, pred))
         self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
@@ -63,7 +58,7 @@ class TestTreeinterpreter(unittest.TestCase):
         dt.fit(X[:len(X)/2], Y[:len(X)/2])
 
         base_prediction = dt.predict(testX)
-        pred, bias, contrib = treeinterpreter.predict_forest(dt, testX)
+        pred, bias, contrib = treeinterpreter.predict(dt, testX)
         self.assertTrue(np.allclose(base_prediction, pred))
         self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
 
@@ -76,7 +71,7 @@ class TestTreeinterpreter(unittest.TestCase):
         dt.fit(X[:len(X)/2], Y[:len(X)/2])
         testX = X[len(X)/2:]
         base_prediction = dt.predict_proba(testX)
-        pred, bias, contrib = treeinterpreter.predict_forest(dt, testX)
+        pred, bias, contrib = treeinterpreter.predict(dt, testX)
         self.assertTrue(np.allclose(base_prediction, pred))
         self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
         
