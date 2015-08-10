@@ -3,6 +3,10 @@ import numpy as np
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import RandomForestClassifier
+from distutils.version import LooseVersion
+import sklearn
+if LooseVersion(sklearn.__version__) < LooseVersion("0.17"):
+    raise Exception("treeinterpreter requires scikit-learn 0.17 or later")
 
 
 def _get_tree_paths(tree, node_id, depth=0):
