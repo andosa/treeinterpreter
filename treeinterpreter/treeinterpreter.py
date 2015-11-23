@@ -145,7 +145,7 @@ if __name__ == "__main__":
     dt.fit(X[:len(X)/2], Y[:len(X)/2])
     testX = X[len(X)/2:len(X)/2+5]
     base_prediction = dt.predict_proba(testX)
-    pred, bias, contrib = _predictforest(dt, testX)
+    pred, bias, contrib = _predict_forest(dt, testX)
 
     assert(np.allclose(base_prediction, pred))
     assert(np.allclose(pred, bias + np.sum(contrib, axis=1)))
