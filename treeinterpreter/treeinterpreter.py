@@ -47,6 +47,9 @@ def _predict_tree(model, X):
 
     # remove the single-dimensional inner arrays
     values = model.tree_.value.squeeze()
+    # reshape if squeezed into a single float
+    if len(values.shape) == 0:
+        values = np.array([values])
 
     if type(model) == DecisionTreeRegressor:
         contributions = np.zeros(X.shape)
