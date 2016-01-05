@@ -25,7 +25,7 @@ class TestTreeinterpreter(unittest.TestCase):
         X = self.boston.data
         Y = self.boston.target
         testX = X[len(X)/2:]
-        
+
         #Predict for decision tree
         dt = DecisionTreeRegressor()
         dt.fit(X[:len(X)/2], Y[:len(X)/2])
@@ -34,8 +34,8 @@ class TestTreeinterpreter(unittest.TestCase):
         pred, bias, contrib = treeinterpreter.predict(dt, testX)
         self.assertTrue(np.allclose(base_prediction, pred))
         self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
-        
-        
+
+
     def test_tree_classifier(self):
         X = self.iris.data
         Y = self.iris.target
@@ -44,7 +44,7 @@ class TestTreeinterpreter(unittest.TestCase):
         testX = X[len(X)/2:len(X)/2+1]
         base_prediction = dt.predict_proba(testX)
         pred, bias, contrib = treeinterpreter.predict(dt, testX)
-        
+
         self.assertTrue(np.allclose(base_prediction, pred))
         self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
 
@@ -52,7 +52,7 @@ class TestTreeinterpreter(unittest.TestCase):
         X = self.boston.data
         Y = self.boston.target
         testX = X[len(X)/2:]
-        
+
         #Predict for decision tree
         dt = RandomForestRegressor(n_estimators=10)
         dt.fit(X[:len(X)/2], Y[:len(X)/2])
@@ -74,8 +74,34 @@ class TestTreeinterpreter(unittest.TestCase):
         pred, bias, contrib = treeinterpreter.predict(dt, testX)
         self.assertTrue(np.allclose(base_prediction, pred))
         self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
-        
-        
+
+    def test_tree_classifier_parallel(self):
+        X = self.iris.data
+        Y = self.iris.target
+        dt = DecisionTreeClassifier()
+        dt.fit(X[:len(X)/2], Y[:len(X)/2])
+        testX = X[len(X)/2:len(X)/2+1]
+        base_prediction = dt.predict_proba(testX)
+        pred, bias, contrib = treeinterpreter.predict(dt, testX, n_jobs=2)
+
+        self.assertTrue(np.allclose(base_prediction, pred))
+        self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
+
+    def test_forest_regressor_parallel(self):
+        X = self.boston.data
+        Y = self.boston.target
+        testX = X[len(X)/2:]
+
+        #Predict for decision tree
+        dt = RandomForestRegressor(n_estimators=10)
+        dt.fit(X[:len(X)/2], Y[:len(X)/2])
+
+        base_prediction = dt.predict(testX)
+        pred, bias, contrib = treeinterpreter.predict(dt, testX, n_jobs=2)
+        self.assertTrue(np.allclose(base_prediction, pred))
+        self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
+
+
     def tearDown(self):
         pass
 
