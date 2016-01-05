@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from joblib import Parallel, delayed
 import numpy as np
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
 from sklearn.ensemble import RandomForestRegressor
@@ -33,7 +34,26 @@ def _get_tree_paths(tree, node_id, depth=0):
     return paths
 
 
-def _predict_tree(model, X):
+def _process_leaf(feature_mat, row, leaf, paths, values, line_shape):
+    """
+    Processes a single leaf and returns the row number, bias, and
+    contributions.
+    """
+    for path in paths:
+        if leaf == path[-1]:
+            break
+
+    bias = values[path[0]]
+    contribs = np.zeros(line_shape)
+    for i in range(len(path) - 1):
+        contrib = values[path[i+1]] - values[path[i]]
+        contribs[feature_mat[path[i]]] += contrib
+
+    contribution = contribs
+    return row, bias, contribution
+
+
+def _predict_tree(model, X, n_jobs, verbose):
     """
     For a given DecisionTreeRegressor or DecisionTreeClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
@@ -66,23 +86,28 @@ def _predict_tree(model, X):
                                   X.shape[1], model.n_classes_))
         line_shape = (X.shape[1], model.n_classes_)
 
-    for row, leaf in enumerate(leaves):
-        for path in paths:
-            if leaf == path[-1]:
-                break
-        biases[row] = values[path[0]]
-        contribs = np.zeros(line_shape)
-        for i in range(len(path) - 1):
-            contrib = values[path[i+1]] - \
-                      values[path[i]]
-            contribs[model.tree_.feature[path[i]]] += contrib
-        contributions[row] = contribs
-        direct_prediction = values[leaves]
+    if n_jobs == 1:
+        for row, leaf in enumerate(leaves):
+            _, bias, contribution = _process_leaf(model.tree_.feature, row, leaf, paths, values, line_shape)
+            contributions[row] = contribution
+            biases[row] = bias
+    else:
+        feature_mat = model.tree_.feature
+        jobs = [delayed(_process_leaf)(feature_mat, row, leaf, paths, values, line_shape)
+                    for row, leaf in enumerate(leaves)]
+        results = Parallel(n_jobs=n_jobs, verbose=verbose)(jobs)
+
+        # storing the results in a loop should be cheap
+        for row, bias, contribution in results:
+            contributions[row] = contribution
+            biases[row] = bias
+
+    direct_prediction = values[leaves]
 
     return direct_prediction, biases, contributions
 
 
-def _predict_forest(model, X):
+def _predict_forest(model, X, n_jobs, verbose):
     """
     For a given RandomForestRegressor or RandomForestClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
@@ -92,7 +117,7 @@ def _predict_forest(model, X):
     contributions = []
     predictions = []
     for tree in model.estimators_:
-        pred, bias, contribution = _predict_tree(tree, X)
+        pred, bias, contribution = _predict_tree(tree, X, n_jobs=n_jobs, verbose=verbose)
         biases.append(bias)
         contributions.append(contribution)
         predictions.append(pred)
@@ -100,7 +125,7 @@ def _predict_forest(model, X):
             np.mean(contributions, axis=0))
 
 
-def predict(model, X):
+def predict(model, X, n_jobs=1, verbose=0):
     """ Returns a triple (prediction, bias, feature_contributions), such
     that prediction ≈ bias + feature_contributions.
     Parameters
@@ -111,6 +136,12 @@ def predict(model, X):
 
     X : array-like, shape = (n_samples, n_features)
     Test samples.
+
+    n_jobs [optional]: Use joblib to parallelize the computation with n_jobs
+        processes; default is 1 job (serial)
+
+    verbose [optional]: Print debug information from joblib by increasing
+        this setting; default is 0.
 
     Returns
     -------
@@ -128,10 +159,10 @@ def predict(model, X):
 
     if (type(model) == DecisionTreeRegressor or
         type(model) == DecisionTreeClassifier):
-        return _predict_tree(model, X)
+        return _predict_tree(model, X, n_jobs=n_jobs, verbose=verbose)
     elif (type(model) == RandomForestRegressor or
           type(model) == RandomForestClassifier):
-        return _predict_forest(model, X)
+        return _predict_forest(model, X, n_jobs=n_jobs, verbose=verbose)
     else:
         raise ValueError("Wrong model type. Base learner needs to be \
             DecisionTreeClassifier or DecisionTreeRegressor.")
