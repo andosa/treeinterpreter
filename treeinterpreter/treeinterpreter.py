@@ -34,7 +34,7 @@ def _get_tree_paths(tree, node_id, depth=0):
     return paths
 
 
-def _process_leaf(model, row, leaf, paths, values, line_shape):
+def _process_leaf(feature_mat, row, leaf, paths, values, line_shape):
     """
     Processes a single leaf and returns the row number, bias, and
     contributions.
@@ -47,7 +47,7 @@ def _process_leaf(model, row, leaf, paths, values, line_shape):
     contribs = np.zeros(line_shape)
     for i in range(len(path) - 1):
         contrib = values[path[i+1]] - values[path[i]]
-        contribs[model.tree_.feature[path[i]]] += contrib
+        contribs[feature_mat[path[i]]] += contrib
 
     contribution = contribs
     return row, bias, contribution
@@ -88,11 +88,12 @@ def _predict_tree(model, X, n_jobs, verbose):
 
     if n_jobs == 1:
         for row, leaf in enumerate(leaves):
-            _, bias, contribution = _process_leaf(model, row, leaf, paths, values, line_shape)
+            _, bias, contribution = _process_leaf(model.tree_.feature, row, leaf, paths, values, line_shape)
             contributions[row] = contribution
             biases[row] = bias
     else:
-        jobs = [delayed(_process_leaf)(model, row, leaf, paths, values, line_shape)
+        feature_mat = model.tree_.feature
+        jobs = [delayed(_process_leaf)(feature_mat, row, leaf, paths, values, line_shape)
                     for row, leaf in enumerate(leaves)]
         results = Parallel(n_jobs=n_jobs, verbose=verbose)(jobs)
 
