@@ -36,7 +36,7 @@ def _get_tree_paths(tree, node_id, depth=0):
     return paths
 
 
-def _predict_tree(model, X, i):
+def _predict_tree(model, X):
     """
     For a given DecisionTreeRegressor or DecisionTreeClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
@@ -99,8 +99,8 @@ def _predict_forest(model, X):
     biases = []
     contributions = []
     predictions = []
-    for i, tree in enumerate(model.estimators_):
-        pred, bias, contribution = _predict_tree(tree, X, i)
+    for tree in model.estimators_:
+        pred, bias, contribution = _predict_tree(tree, X)
         biases.append(bias)
         contributions.append(contribution)
         predictions.append(pred)
@@ -136,7 +136,7 @@ def predict(model, X):
 
     if (type(model) == DecisionTreeRegressor or
         type(model) == DecisionTreeClassifier):
-        return _predict_tree(model, X, 0)
+        return _predict_tree(model, X)
     elif (type(model) == RandomForestRegressor or
           type(model) == RandomForestClassifier):
         return _predict_forest(model, X)
