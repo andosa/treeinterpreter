@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
-import numpy as np
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.ensemble import RandomForestClassifier
 from distutils.version import LooseVersion
+
+import numpy as np
 import sklearn
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, _tree
+
 if LooseVersion(sklearn.__version__) < LooseVersion("0.17"):
     raise Exception("treeinterpreter requires scikit-learn 0.17 or later")
 
+# Local cache of the model paths for each tree
+_tree_cache = {}
 
 def _get_tree_paths(tree, node_id, depth=0):
     """
@@ -33,23 +36,28 @@ def _get_tree_paths(tree, node_id, depth=0):
     return paths
 
 
-def _predict_tree(model, X):
+def _predict_tree(model, X, i):
     """
     For a given DecisionTreeRegressor or DecisionTreeClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
     that prediction ≈ bias + feature_contributions.
     """
     leaves = model.apply(X)
-    paths = _get_tree_paths(model.tree_, 0)
+
+    global _tree_cache
+    # If we haven't cached this tree, then add it here
+    if model.tree_ not in _tree_cache:
+        paths = _get_tree_paths(model.tree_, 0)
+        _tree_cache[model.tree_] = paths
+    else:
+        # Grab the paths for this tree out of our cache if it's present
+        paths = _tree_cache[model.tree_]
 
     for path in paths:
         path.reverse()
 
     # remove the single-dimensional inner arrays
     values = model.tree_.value.squeeze()
-    # reshape if squeezed into a single float
-    if len(values.shape) == 0:
-        values = np.array([values])
 
     if type(model) == DecisionTreeRegressor:
         contributions = np.zeros(X.shape)
@@ -91,8 +99,8 @@ def _predict_forest(model, X):
     biases = []
     contributions = []
     predictions = []
-    for tree in model.estimators_:
-        pred, bias, contribution = _predict_tree(tree, X)
+    for i, tree in enumerate(model.estimators_):
+        pred, bias, contribution = _predict_tree(tree, X, i)
         biases.append(bias)
         contributions.append(contribution)
         predictions.append(pred)
@@ -128,7 +136,7 @@ def predict(model, X):
 
     if (type(model) == DecisionTreeRegressor or
         type(model) == DecisionTreeClassifier):
-        return _predict_tree(model, X)
+        return _predict_tree(model, X, 0)
     elif (type(model) == RandomForestRegressor or
           type(model) == RandomForestClassifier):
         return _predict_forest(model, X)
@@ -148,7 +156,7 @@ if __name__ == "__main__":
     dt.fit(X[:len(X)/2], Y[:len(X)/2])
     testX = X[len(X)/2:len(X)/2+5]
     base_prediction = dt.predict_proba(testX)
-    pred, bias, contrib = _predict_forest(dt, testX)
+    pred, bias, contrib = _predictforest(dt, testX)
 
     assert(np.allclose(base_prediction, pred))
     assert(np.allclose(pred, bias + np.sum(contrib, axis=1)))

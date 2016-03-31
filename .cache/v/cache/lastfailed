@@ -1,0 +1,3 @@
+{
+  "tests/test_treeinterpreter.py::TestTreeinterpreter::test_forest_classifier": true
+}
