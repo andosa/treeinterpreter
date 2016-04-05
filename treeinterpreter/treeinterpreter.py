@@ -48,13 +48,12 @@ def _predict_tree(model, X):
     # If we haven't cached this tree, then add it here
     if model.tree_ not in _tree_cache:
         paths = _get_tree_paths(model.tree_, 0)
+        for path in paths:
+            path.reverse()
         _tree_cache[model.tree_] = paths
     else:
         # Grab the paths for this tree out of our cache if it's present
         paths = _tree_cache[model.tree_]
-
-    for path in paths:
-        path.reverse()
 
     # remove the single-dimensional inner arrays
     values = model.tree_.value.squeeze()
