@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
-import numpy as np
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.ensemble import RandomForestClassifier
 from distutils.version import LooseVersion
+
+import numpy as np
 import sklearn
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, _tree
+
 if LooseVersion(sklearn.__version__) < LooseVersion("0.17"):
     raise Exception("treeinterpreter requires scikit-learn 0.17 or later")
 
+# Local cache of the model paths for each tree
+_tree_cache = {}
 
 def _get_tree_paths(tree, node_id, depth=0):
     """
@@ -40,16 +43,20 @@ def _predict_tree(model, X):
     that prediction ≈ bias + feature_contributions.
     """
     leaves = model.apply(X)
-    paths = _get_tree_paths(model.tree_, 0)
 
-    for path in paths:
-        path.reverse()
+    global _tree_cache
+    # If we haven't cached this tree, then add it here
+    if model.tree_ not in _tree_cache:
+        paths = _get_tree_paths(model.tree_, 0)
+        for path in paths:
+            path.reverse()
+        _tree_cache[model.tree_] = paths
+    else:
+        # Grab the paths for this tree out of our cache if it's present
+        paths = _tree_cache[model.tree_]
 
     # remove the single-dimensional inner arrays
     values = model.tree_.value.squeeze()
-    # reshape if squeezed into a single float
-    if len(values.shape) == 0:
-        values = np.array([values])
 
     if type(model) == DecisionTreeRegressor:
         contributions = np.zeros(X.shape)
