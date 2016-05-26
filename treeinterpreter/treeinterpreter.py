@@ -45,15 +45,18 @@ def _predict_tree(model, X):
     for path in paths:
         path.reverse()
 
+    leaf_to_path = {}
+    #map leaves to paths
+    for path in paths:
+        leaf_to_path[path[-1]] = path         
+    
     # remove the single-dimensional inner arrays
     values = model.tree_.value.squeeze()
     # reshape if squeezed into a single float
     if len(values.shape) == 0:
         values = np.array([values])
-
     if type(model) == DecisionTreeRegressor:
-        contributions = np.zeros(X.shape)
-        biases = np.zeros(X.shape[0])
+        biases = np.full(X.shape[0], values[paths[0][0]])
         line_shape = X.shape[1]
     elif type(model) == DecisionTreeClassifier:
         # scikit stores category counts, we turn them into probabilities
@@ -61,25 +64,30 @@ def _predict_tree(model, X):
         normalizer[normalizer == 0.0] = 1.0
         values /= normalizer
 
-        biases = np.zeros((X.shape[0], model.n_classes_))
-        contributions = np.zeros((X.shape[0],
-                                  X.shape[1], model.n_classes_))
+        biases = np.tile(values[paths[0][0]], (X.shape[0], 1))
         line_shape = (X.shape[1], model.n_classes_)
-
+    direct_prediction = values[leaves]
+    
+    
+    #make into python list, accessing values will be faster
+    values_list = list(values)
+    feature_index = list(model.tree_.feature)
+    
+    contributions = []
     for row, leaf in enumerate(leaves):
         for path in paths:
             if leaf == path[-1]:
                 break
-        biases[row] = values[path[0]]
+        
         contribs = np.zeros(line_shape)
         for i in range(len(path) - 1):
-            contrib = values[path[i+1]] - \
-                      values[path[i]]
-            contribs[model.tree_.feature[path[i]]] += contrib
-        contributions[row] = contribs
-        direct_prediction = values[leaves]
-
-    return direct_prediction, biases, contributions
+            
+            contrib = values_list[path[i+1]] - \
+                     values_list[path[i]]
+            contribs[feature_index[path[i]]] += contrib
+        contributions.append(contribs)
+    
+    return direct_prediction, biases, np.array(contributions)
 
 
 def _predict_forest(model, X):
