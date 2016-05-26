@@ -33,7 +33,7 @@ def _get_tree_paths(tree, node_id, depth=0):
     return paths
 
 
-def _predict_tree(model, X):
+def _predict_tree(model, X, conditional=False):
     """
     For a given DecisionTreeRegressor or DecisionTreeClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
@@ -74,23 +74,40 @@ def _predict_tree(model, X):
     feature_index = list(model.tree_.feature)
     
     contributions = []
-    for row, leaf in enumerate(leaves):
-        for path in paths:
-            if leaf == path[-1]:
-                break
-        
-        contribs = np.zeros(line_shape)
-        for i in range(len(path) - 1):
+    if conditional:
+        for row, leaf in enumerate(leaves):
+            path = leaf_to_path[leaf]
             
-            contrib = values_list[path[i+1]] - \
-                     values_list[path[i]]
-            contribs[feature_index[path[i]]] += contrib
-        contributions.append(contribs)
+            
+            path_features = []
+            contributions.append({})
+            for i in range(len(path) - 1):
+                path_features.append(feature_index[path[i]])
+                contrib = values_list[path[i+1]] - \
+                         values_list[path[i]]
+                path_features.sort()
+                contributions[row][tuple(path_features)] = contrib
+        return direct_prediction, biases, contributions
+        
+    else:
+
+        for row, leaf in enumerate(leaves):
+            for path in paths:
+                if leaf == path[-1]:
+                    break
+            
+            contribs = np.zeros(line_shape)
+            for i in range(len(path) - 1):
+                
+                contrib = values_list[path[i+1]] - \
+                         values_list[path[i]]
+                contribs[feature_index[path[i]]] += contrib
+            contributions.append(contribs)
     
-    return direct_prediction, biases, np.array(contributions)
+        return direct_prediction, biases, np.array(contributions)
 
 
-def _predict_forest(model, X):
+def _predict_forest(model, X, conditional=False):
     """
     For a given RandomForestRegressor or RandomForestClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
@@ -99,16 +116,50 @@ def _predict_forest(model, X):
     biases = []
     contributions = []
     predictions = []
-    for tree in model.estimators_:
-        pred, bias, contribution = _predict_tree(tree, X)
-        biases.append(bias)
-        contributions.append(contribution)
-        predictions.append(pred)
-    return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
+
+    
+    if conditional:
+        
+        for tree in model.estimators_:
+            pred, bias, contribution = _predict_tree(tree, X)
+
+            biases.append(bias)
+            contributions.append(contribution)
+            predictions.append(pred)
+        
+        
+        total_contributions = []
+        
+        for i in range(len(X)):
+            contr = {}
+            for j, dct in enumerate(contributions):
+                for k in set(dct[i]).union(set(contr.keys())):
+                    contr[k] = (contr.get(k, 0)*j + dct[i].get(k,0) ) / (j+1)
+
+            total_contributions.append(contr)    
+            
+        for i, item in enumerate(contribution):
+            total_contributions[i]
+            sm = sum([v for v in contribution[i].values()])
+                
+
+        
+        return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
+            total_contributions)
+    else:
+        for tree in model.estimators_:
+            pred, bias, contribution = _predict_tree(tree, X)
+
+            biases.append(bias)
+            contributions.append(contribution)
+            predictions.append(pred)
+        
+        
+        return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
             np.mean(contributions, axis=0))
 
 
-def predict(model, X):
+def predict(model, X, conditional=False):
     """ Returns a triple (prediction, bias, feature_contributions), such
     that prediction ≈ bias + feature_contributions.
     Parameters
@@ -136,10 +187,10 @@ def predict(model, X):
 
     if (type(model) == DecisionTreeRegressor or
         type(model) == DecisionTreeClassifier):
-        return _predict_tree(model, X)
+        return _predict_tree(model, X, conditional=conditional)
     elif (type(model) == RandomForestRegressor or
           type(model) == RandomForestClassifier):
-        return _predict_forest(model, X)
+        return _predict_forest(model, X, conditional=conditional)
     else:
         raise ValueError("Wrong model type. Base learner needs to be \
             DecisionTreeClassifier or DecisionTreeRegressor.")

@@ -35,6 +35,13 @@ class TestTreeinterpreter(unittest.TestCase):
         self.assertTrue(np.allclose(base_prediction, pred))
         self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
         
+        testX = X[-1:]
+        base_prediction = dt.predict(testX)
+        pred, bias, contrib = treeinterpreter.predict(dt, testX)
+        self.assertTrue(np.allclose(base_prediction, pred))
+        self.assertTrue(np.allclose(pred, bias + np.sum(contrib, axis=1)))
+
+        
         
     def test_tree_classifier(self):
         X = self.iris.data
