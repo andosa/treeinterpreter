@@ -33,7 +33,7 @@ def _get_tree_paths(tree, node_id, depth=0):
     return paths
 
 
-def _predict_tree(model, X, conditional=False):
+def _predict_tree(model, X, joint_contribution=False):
     """
     For a given DecisionTreeRegressor or DecisionTreeClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
@@ -74,7 +74,7 @@ def _predict_tree(model, X, conditional=False):
     feature_index = list(model.tree_.feature)
     
     contributions = []
-    if conditional:
+    if joint_contribution:
         for row, leaf in enumerate(leaves):
             path = leaf_to_path[leaf]
             
@@ -107,7 +107,7 @@ def _predict_tree(model, X, conditional=False):
         return direct_prediction, biases, np.array(contributions)
 
 
-def _predict_forest(model, X, conditional=False):
+def _predict_forest(model, X, joint_contribution=False):
     """
     For a given RandomForestRegressor or RandomForestClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
@@ -118,10 +118,10 @@ def _predict_forest(model, X, conditional=False):
     predictions = []
 
     
-    if conditional:
+    if joint_contribution:
         
         for tree in model.estimators_:
-            pred, bias, contribution = _predict_tree(tree, X)
+            pred, bias, contribution = _predict_tree(tree, X, joint_contribution=joint_contribution)
 
             biases.append(bias)
             contributions.append(contribution)
@@ -159,7 +159,7 @@ def _predict_forest(model, X, conditional=False):
             np.mean(contributions, axis=0))
 
 
-def predict(model, X, conditional=False):
+def predict(model, X, joint_contribution=False):
     """ Returns a triple (prediction, bias, feature_contributions), such
     that prediction ≈ bias + feature_contributions.
     Parameters
@@ -170,6 +170,10 @@ def predict(model, X, conditional=False):
 
     X : array-like, shape = (n_samples, n_features)
     Test samples.
+    
+    joint_contribution : boolean
+    Specifies if contributions are given individually from each feature,
+    or jointly over them
 
     Returns
     -------
@@ -178,8 +182,13 @@ def predict(model, X, conditional=False):
         for classification
     * bias, shape = (n_samples) for regression and (n_samples, n_classes) for
         classification
-    * contributions, shape = (n_samples, n_features) for regression or
-        shape = (n_samples, n_features, n_classes) for classification
+    * contributions, If joint_contribution is False then returns and  array of 
+        shape = (n_samples, n_features) for regression or
+        shape = (n_samples, n_features, n_classes) for classification, denoting
+        contribution from each feature.
+        If joint_contribution is True, then shape is array of size n_samples,
+        where each array element is a dict from a tuple of feature indices to
+        to a value denoting the contribution from that feature tuple.
     """
     # Only single out response variable supported,
     if model.n_outputs_ > 1:
@@ -187,27 +196,10 @@ def predict(model, X, conditional=False):
 
     if (type(model) == DecisionTreeRegressor or
         type(model) == DecisionTreeClassifier):
-        return _predict_tree(model, X, conditional=conditional)
+        return _predict_tree(model, X, joint_contribution=joint_contribution)
     elif (type(model) == RandomForestRegressor or
           type(model) == RandomForestClassifier):
-        return _predict_forest(model, X, conditional=conditional)
+        return _predict_forest(model, X, joint_contribution=joint_contribution)
     else:
         raise ValueError("Wrong model type. Base learner needs to be \
             DecisionTreeClassifier or DecisionTreeRegressor.")
-
-if __name__ == "__main__":
-    # test
-    from sklearn.datasets import load_iris
-    iris = load_iris()
-    idx = range(len(iris.data))
-    np.random.shuffle(idx)
-    X = iris.data[idx]
-    Y = iris.target[idx]
-    dt = RandomForestClassifier(max_depth=3)
-    dt.fit(X[:len(X)/2], Y[:len(X)/2])
-    testX = X[len(X)/2:len(X)/2+5]
-    base_prediction = dt.predict_proba(testX)
-    pred, bias, contrib = _predict_forest(dt, testX)
-
-    assert(np.allclose(base_prediction, pred))
-    assert(np.allclose(pred, bias + np.sum(contrib, axis=1)))
