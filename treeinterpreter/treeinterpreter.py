@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+from scipy.special import expit
+
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingClassifier
 from distutils.version import LooseVersion
 import sklearn
 if LooseVersion(sklearn.__version__) < LooseVersion("0.17"):
@@ -48,8 +52,8 @@ def _predict_tree(model, X):
     leaf_to_path = {}
     #map leaves to paths
     for path in paths:
-        leaf_to_path[path[-1]] = path         
-    
+        leaf_to_path[path[-1]] = path
+
     # remove the single-dimensional inner arrays
     values = model.tree_.value.squeeze()
     # reshape if squeezed into a single float
@@ -67,46 +71,104 @@ def _predict_tree(model, X):
         biases = np.tile(values[paths[0][0]], (X.shape[0], 1))
         line_shape = (X.shape[1], model.n_classes_)
     direct_prediction = values[leaves]
-    
-    
+
+
     #make into python list, accessing values will be faster
     values_list = list(values)
     feature_index = list(model.tree_.feature)
-    
+
     contributions = []
     for row, leaf in enumerate(leaves):
         for path in paths:
             if leaf == path[-1]:
                 break
-        
+
         contribs = np.zeros(line_shape)
         for i in range(len(path) - 1):
-            
+
             contrib = values_list[path[i+1]] - \
                      values_list[path[i]]
             contribs[feature_index[path[i]]] += contrib
         contributions.append(contribs)
-    
+
     return direct_prediction, biases, np.array(contributions)
 
 
 def _predict_forest(model, X):
     """
-    For a given RandomForestRegressor or RandomForestClassifier,
+    For a given regressor or classifier,
     returns a triple of [prediction, bias and feature_contributions], such
     that prediction ≈ bias + feature_contributions.
     """
-    biases = []
-    contributions = []
-    predictions = []
-    for tree in model.estimators_:
-        pred, bias, contribution = _predict_tree(tree, X)
-        biases.append(bias)
-        contributions.append(contribution)
-        predictions.append(pred)
-    return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
-            np.mean(contributions, axis=0))
+    n_estimators = model.n_estimators
+    n_classes = 1
+    try:
+        n_classes = model.n_classes_
+    except:
+        n_classes = 1
 
+    predictions   = np.zeros((X.shape[0], n_classes))
+    biases        = np.zeros((X.shape[0], n_classes))
+    contributions = np.zeros((X.shape[0], X.shape[1], n_classes))
+
+    if(type(model) == RandomForestClassifier):
+        for tree in model.estimators_:
+            pred, bias, contribution = _predict_tree(tree, X)
+            predictions   = predictions + pred / n_estimators
+            biases        = biases + bias / n_estimators
+            contributions = contributions + contribution / n_estimators
+    if(type(model) == RandomForestRegressor):
+        for tree in model.estimators_:
+            # No need for last dimension (n_classes == 1) here:
+            contributions = np.squeeze(contributions)
+            predictions = np.squeeze(predictions)
+            biases = np.squeeze(biases)
+
+            pred, bias, contribution = _predict_tree(tree, X)
+            predictions   = predictions + pred / n_estimators
+            biases        = biases + bias / n_estimators
+            contributions = contributions + contribution / n_estimators
+
+    elif(type(model) == GradientBoostingRegressor or
+         type(model) == GradientBoostingClassifier):
+	learning_rate = model.learning_rate
+
+	# Base learner
+        base_pred = model.init_.predict(X)
+        if n_classes == 2:
+            biases[:,1]      = np.squeeze(base_pred)
+            predictions[:,1] = np.squeeze(base_pred)
+            biases[:,0]      = -np.squeeze(base_pred)
+            predictions[:,0] = -np.squeeze(base_pred)
+        else:
+            biases = biases + base_pred
+            predictions = predictions + base_pred
+
+	# Tree learners
+	for trees in model.estimators_:
+            for c, tree in enumerate(trees):
+                pred, bias, contribution = _predict_tree(tree, X)
+                biases[:,c]          = biases[:,c] + bias * learning_rate
+                contributions[:,:,c] = contributions[:,:,c] + contribution * learning_rate
+                predictions[:,c]     = predictions[:,c] + pred * learning_rate
+
+        # If classification, need to output probabilities. So scaling score into [0-1]
+        if(type(model) == GradientBoostingClassifier):
+            # Special case when only 2 classes:
+            if n_classes == 2:
+                predictions = model.loss_._score_to_proba(predictions[:,0])
+                contributions[:,:,1] = contributions[:,:,0]
+                contributions[:,:,0] = -contributions[:,:,0]
+                biases[:,1] = biases[:,0]
+                biases[:,0] = -biases[:,0]
+            else:
+                predictions = model.loss_._score_to_proba(predictions)
+        else:
+            predictions   = np.squeeze(predictions)
+            biases        = np.squeeze(biases)
+            contributions = np.squeeze(contributions)
+
+    return (predictions, biases, contributions)
 
 def predict(model, X):
     """ Returns a triple (prediction, bias, feature_contributions), such
@@ -131,14 +193,16 @@ def predict(model, X):
         shape = (n_samples, n_features, n_classes) for classification
     """
     # Only single out response variable supported,
-    if model.n_outputs_ > 1:
-        raise ValueError("Multilabel classification trees not supported")
+    #if model.n_outputs_ > 1:
+    #    raise ValueError("Multilabel classification trees not supported")
 
     if (type(model) == DecisionTreeRegressor or
         type(model) == DecisionTreeClassifier):
         return _predict_tree(model, X)
     elif (type(model) == RandomForestRegressor or
-          type(model) == RandomForestClassifier):
+          type(model) == RandomForestClassifier or
+          type(model) == GradientBoostingClassifier or
+          type(model) == GradientBoostingRegressor):
         return _predict_forest(model, X)
     else:
         raise ValueError("Wrong model type. Base learner needs to be \
