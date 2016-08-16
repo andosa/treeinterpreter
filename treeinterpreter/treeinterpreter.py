@@ -111,15 +111,10 @@ def _predict_forest(model, X):
     biases        = np.zeros((X.shape[0], n_classes))
     contributions = np.zeros((X.shape[0], X.shape[1], n_classes))
 
-    if(type(model) == RandomForestClassifier):
+    if(type(model) == RandomForestClassifier or
+       type(model) == RandomForestRegressor):
         for tree in model.estimators_:
-            pred, bias, contribution = _predict_tree(tree, X)
-            predictions   = predictions + pred / n_estimators
-            biases        = biases + bias / n_estimators
-            contributions = contributions + contribution / n_estimators
-    if(type(model) == RandomForestRegressor):
-        for tree in model.estimators_:
-            # No need for last dimension (n_classes == 1) here:
+            # No need for last dimension when n_classes == 1:
             contributions = np.squeeze(contributions)
             predictions = np.squeeze(predictions)
             biases = np.squeeze(biases)
