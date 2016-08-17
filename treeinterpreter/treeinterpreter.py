@@ -12,30 +12,7 @@ import sklearn
 if LooseVersion(sklearn.__version__) < LooseVersion("0.17"):
     raise Exception("treeinterpreter requires scikit-learn 0.17 or later")
 
-
-def _get_tree_paths(tree, node_id, depth=0):
-    """
-    Returns all paths through the tree as list of node_ids
-    """
-    if node_id == _tree.TREE_LEAF:
-        raise ValueError("Invalid node_id %s" % _tree.TREE_LEAF)
-
-    left_child = tree.children_left[node_id]
-    right_child = tree.children_right[node_id]
-
-    if left_child != _tree.TREE_LEAF:
-        left_paths = _get_tree_paths(tree, left_child, depth=depth + 1)
-        right_paths = _get_tree_paths(tree, right_child, depth=depth + 1)
-
-        for path in left_paths:
-            path.append(node_id)
-        for path in right_paths:
-            path.append(node_id)
-        paths = left_paths + right_paths
-    else:
-        paths = [[node_id]]
-    return paths
-
+from sklearn.tree import export_graphviz
 
 def _predict_tree(model, X):
     """
@@ -43,55 +20,61 @@ def _predict_tree(model, X):
     returns a triple of [prediction, bias and feature_contributions], such
     that prediction ≈ bias + feature_contributions.
     """
-    leaves = model.apply(X)
-    paths = _get_tree_paths(model.tree_, 0)
+    tree = model.tree_
 
-    for path in paths:
-        path.reverse()
-
-    leaf_to_path = {}
-    #map leaves to paths
-    for path in paths:
-        leaf_to_path[path[-1]] = path
-
-    # remove the single-dimensional inner arrays
-    values = model.tree_.value.squeeze()
-    # reshape if squeezed into a single float
-    if len(values.shape) == 0:
-        values = np.array([values])
     if type(model) == DecisionTreeRegressor:
-        biases = np.full(X.shape[0], values[paths[0][0]])
-        line_shape = X.shape[1]
+        b = tree.value[0,0,0]
+        bias = np.array([b,] * X.shape[0]) # output shape = (n_samples)
+
+        contribs = np.zeros(X.shape)
+        preds    = np.zeros(X.shape[0])
     elif type(model) == DecisionTreeClassifier:
-        # scikit stores category counts, we turn them into probabilities
-        normalizer = values.sum(axis=1)[:, np.newaxis]
-        normalizer[normalizer == 0.0] = 1.0
-        values /= normalizer
+        b = tree.value[0,0]
+        b = b / b.sum()
+        bias = np.array([b,] * X.shape[0]) # output shape = (n_samples, n_classes)
 
-        biases = np.tile(values[paths[0][0]], (X.shape[0], 1))
-        line_shape = (X.shape[1], model.n_classes_)
-    direct_prediction = values[leaves]
+        contribs = np.zeros((X.shape[0], X.shape[1], model.n_classes_))
+        preds    = np.zeros((X.shape[0], model.n_classes_))
+    else:
+        raise('%s model is not a scikit decision tree model.' % type(model))
 
+    # Contributions & predictions for each line
+    for i,x in enumerate(np.array(X)):
+        leaf = model.apply([x])
+        if type(model) == DecisionTreeRegressor:
+            preds[i] = tree.value[leaf].squeeze()
+        elif type(model) == DecisionTreeClassifier:
+            preds[i] = tree.value[leaf].squeeze()
+            s = sum(preds[i])
+            normalizer = s if s != 0 else 1
+            preds[i] = preds[i] / normalizer
 
-    #make into python list, accessing values will be faster
-    values_list = list(values)
-    feature_index = list(model.tree_.feature)
+        node = 0 # Starting from root, going to the leaf
+        while node != leaf:
+            # Using node indices to find the leaf
+            if leaf < tree.children_right[node]:
+                prev = node
+                node = tree.children_left[node]
+            else:
+                prev = node
+                node = tree.children_right[node]
 
-    contributions = []
-    for row, leaf in enumerate(leaves):
-        for path in paths:
-            if leaf == path[-1]:
-                break
+            if type(model) == DecisionTreeRegressor:
+                contribs[i,tree.feature[node]] = contribs[i,tree.feature[node]] + tree.value[node,0] - tree.value[prev,0]
+            elif type(model) == DecisionTreeClassifier:
+                norm1 = sum(tree.value[node, 0])
+                norm1 = norm1 if norm1 != 0 else 1
+                norm2 = sum(tree.value[prev, 0])
+                norm2 = norm2 if norm2 != 0 else 1
+                contribs[i,tree.feature[node]] = contribs[i,tree.feature[node]] + tree.value[node,0] / norm1 - tree.value[prev,0] / norm2
 
-        contribs = np.zeros(line_shape)
-        for i in range(len(path) - 1):
+            #print node, tree.threshold[node]
+            if node == -1:
+                export_graphviz(model)
+                print x
+                raise Exception('Can\'t find the following leaf: %d' % leaf)
 
-            contrib = values_list[path[i+1]] - \
-                     values_list[path[i]]
-            contribs[feature_index[path[i]]] += contrib
-        contributions.append(contribs)
-
-    return direct_prediction, biases, np.array(contributions)
+    return preds, bias, contribs
 
 
 def _predict_forest(model, X):
