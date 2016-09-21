@@ -79,14 +79,15 @@ def _predict_tree(model, X, joint_contribution=False):
             path = leaf_to_path[leaf]
             
             
-            path_features = []
+            path_features = set()
             contributions.append({})
             for i in range(len(path) - 1):
-                path_features.append(feature_index[path[i]])
+                path_features.add(feature_index[path[i]])
                 contrib = values_list[path[i+1]] - \
                          values_list[path[i]]
-                path_features.sort()
-                contributions[row][tuple(path_features)] = contrib
+                #path_features.sort()
+                contributions[row][tuple(sorted(path_features))] = \
+                    contributions[row].get(tuple(sorted(path_features)), 0) + contrib
         return direct_prediction, biases, contributions
         
     else:
