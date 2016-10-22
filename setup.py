@@ -24,7 +24,7 @@ test_requirements = [
 
 setup(
     name='treeinterpreter',
-    version='0.2.0',
+    version='0.2.1',
     description="Package for interpreting scikit-learn's decision tree and random forest predictions.",
     long_description=readme + '\n\n' + history,
     author="Ando Saabas",
