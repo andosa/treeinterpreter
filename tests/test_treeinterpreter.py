@@ -24,11 +24,11 @@ class TestTreeinterpreter(unittest.TestCase):
     def test_tree_regressor(self):
         X = self.boston.data
         Y = self.boston.target
-        testX = X[len(X)/2:]
+        testX = X[int(len(X)/2):]
         
         #Predict for decision tree
         dt = DecisionTreeRegressor()
-        dt.fit(X[:len(X)/2], Y[:len(X)/2])
+        dt.fit(X[:int(len(X)/2)], Y[:int(len(X)/2)])
 
         base_prediction = dt.predict(testX)
         pred, bias, contrib = treeinterpreter.predict(dt, testX)
@@ -47,8 +47,8 @@ class TestTreeinterpreter(unittest.TestCase):
         X = self.iris.data
         Y = self.iris.target
         dt = DecisionTreeClassifier()
-        dt.fit(X[:len(X)/2], Y[:len(X)/2])
-        testX = X[len(X)/2:len(X)/2+1]
+        dt.fit(X[:int(len(X)/2)], Y[:int(len(X)/2)])
+        testX = X[int(len(X)/2):int(len(X)/2)+1]
         base_prediction = dt.predict_proba(testX)
         pred, bias, contrib = treeinterpreter.predict(dt, testX)
         
@@ -58,11 +58,11 @@ class TestTreeinterpreter(unittest.TestCase):
     def test_forest_regressor(self):
         X = self.boston.data
         Y = self.boston.target
-        testX = X[len(X)/2:]
+        testX = X[int(len(X)/2):]
         
         #Predict for decision tree
         dt = RandomForestRegressor(n_estimators=10)
-        dt.fit(X[:len(X)/2], Y[:len(X)/2])
+        dt.fit(X[:int(len(X)/2)], Y[:int(len(X)/2)])
 
         base_prediction = dt.predict(testX)
         pred, bias, contrib = treeinterpreter.predict(dt, testX)
@@ -72,11 +72,11 @@ class TestTreeinterpreter(unittest.TestCase):
     def test_forest_regressor_joint(self):
         X = self.boston.data
         Y = self.boston.target
-        testX = X[len(X)/2:]
+        testX = X[int(len(X)/2):]
         
         #Predict for decision tree
         dt = RandomForestRegressor(n_estimators=10)
-        dt.fit(X[:len(X)/2], Y[:len(X)/2])
+        dt.fit(X[:int(len(X)/2)], Y[:int(len(X)/2)])
 
         base_prediction = dt.predict(testX)
         pred, bias, contribs = treeinterpreter.predict(dt, testX, joint_contribution=True)
@@ -85,13 +85,13 @@ class TestTreeinterpreter(unittest.TestCase):
         self.assertTrue(np.allclose(base_prediction, np.array([sum(contrib.values()) for contrib in contribs]) + bias))
 
     def test_forest_classifier(self):
-        idx = range(len(self.iris.data))
+        idx = np.arange(len(self.iris.data))
         np.random.shuffle(idx)
         X = self.iris.data[idx]
         Y = self.iris.target[idx]
         dt = RandomForestClassifier(max_depth=3)
-        dt.fit(X[:len(X)/2], Y[:len(X)/2])
-        testX = X[len(X)/2:]
+        dt.fit(X[:int(len(X)/2)], Y[:int(len(X)/2)])
+        testX = X[int(len(X)/2):]
         base_prediction = dt.predict_proba(testX)
         pred, bias, contrib = treeinterpreter.predict(dt, testX)
         self.assertTrue(np.allclose(base_prediction, pred))
@@ -99,13 +99,13 @@ class TestTreeinterpreter(unittest.TestCase):
 
 
     def test_forest_classifier_joint(self):
-        idx = range(len(self.iris.data))
+        idx = np.arange(len(self.iris.data))
         np.random.shuffle(idx)
         X = self.iris.data[idx]
         Y = self.iris.target[idx]
         dt = RandomForestClassifier(max_depth=3)
-        dt.fit(X[:len(X)/2], Y[:len(X)/2])
-        testX = X[len(X)/2:]
+        dt.fit(X[:int(len(X)/2)], Y[:int(len(X)/2)])
+        testX = X[int(len(X)/2):]
         base_prediction = dt.predict_proba(testX)
         pred, bias, contribs = treeinterpreter.predict(dt, testX, joint_contribution=True)
         self.assertTrue(np.allclose(base_prediction, pred))
