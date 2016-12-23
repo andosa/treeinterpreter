@@ -91,8 +91,10 @@ def _predict_tree(model, X, joint_contribution=False):
         return direct_prediction, biases, contributions
         
     else:
-
-        for row, leaf in enumerate(leaves):
+        unique_leaves = np.unique(leaves)
+        unique_contributions = {}
+        
+        for row, leaf in enumerate(unique_leaves):
             for path in paths:
                 if leaf == path[-1]:
                     break
@@ -103,8 +105,11 @@ def _predict_tree(model, X, joint_contribution=False):
                 contrib = values_list[path[i+1]] - \
                          values_list[path[i]]
                 contribs[feature_index[path[i]]] += contrib
-            contributions.append(contribs)
-    
+            unique_contributions[leaf] = contribs
+            
+        for row, leaf in enumerate(leaves):
+            contributions.append(unique_contributions[leaf])
+
         return direct_prediction, biases, np.array(contributions)
 
 
