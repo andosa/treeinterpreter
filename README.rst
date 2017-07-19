@@ -9,8 +9,12 @@ It works on scikit-learn's
 
 * DecisionTreeRegressor
 * DecisionTreeClassifier
+* ExtraTreeRegressor
+* ExtraTreeClassifier
 * RandomForestRegressor
 * RandomForestClassifier
+* ExtraTreesRegressor
+* ExtraTreesClassifier
 
 Free software: BSD license
 
