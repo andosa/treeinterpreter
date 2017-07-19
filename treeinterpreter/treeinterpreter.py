@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.ensemble import RandomForestClassifier
-from distutils.version import LooseVersion
 import sklearn
+
+from sklearn.ensemble.forest import ForestClassifier, ForestRegressor
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
+from distutils.version import LooseVersion
 if LooseVersion(sklearn.__version__) < LooseVersion("0.17"):
     raise Exception("treeinterpreter requires scikit-learn 0.17 or later")
 
@@ -35,7 +35,8 @@ def _get_tree_paths(tree, node_id, depth=0):
 
 def _predict_tree(model, X, joint_contribution=False):
     """
-    For a given DecisionTreeRegressor or DecisionTreeClassifier,
+    For a given DecisionTreeRegressor, DecisionTreeClassifier,
+    ExtraTreeRegressor, or ExtraTreeClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
     that prediction ≈ bias + feature_contributions.
     """
@@ -55,10 +56,10 @@ def _predict_tree(model, X, joint_contribution=False):
     # reshape if squeezed into a single float
     if len(values.shape) == 0:
         values = np.array([values])
-    if type(model) == DecisionTreeRegressor:
+    if isinstance(model, DecisionTreeRegressor):
         biases = np.full(X.shape[0], values[paths[0][0]])
         line_shape = X.shape[1]
-    elif type(model) == DecisionTreeClassifier:
+    elif isinstance(model, DecisionTreeClassifier):
         # scikit stores category counts, we turn them into probabilities
         normalizer = values.sum(axis=1)[:, np.newaxis]
         normalizer[normalizer == 0.0] = 1.0
@@ -110,9 +111,10 @@ def _predict_tree(model, X, joint_contribution=False):
 
 def _predict_forest(model, X, joint_contribution=False):
     """
-    For a given RandomForestRegressor or RandomForestClassifier,
-    returns a triple of [prediction, bias and feature_contributions], such
-    that prediction ≈ bias + feature_contributions.
+    For a given RandomForestRegressor, RandomForestClassifier,
+    ExtraTreesRegressor, or ExtraTreesClassifier returns a triple of
+    [prediction, bias and feature_contributions], such that prediction ≈ bias +
+    feature_contributions.
     """
     biases = []
     contributions = []
@@ -165,8 +167,10 @@ def predict(model, X, joint_contribution=False):
     that prediction ≈ bias + feature_contributions.
     Parameters
     ----------
-    model : DecisionTreeRegressor, DecisionTreeClassifier or
-        RandomForestRegressor, RandomForestClassifier
+    model : DecisionTreeRegressor, DecisionTreeClassifier,
+        ExtraTreeRegressor, ExtraTreeClassifier,
+        RandomForestRegressor, RandomForestClassifier,
+        ExtraTreesRegressor, ExtraTreesClassifier
     Scikit-learn model on which the prediction should be decomposed.
 
     X : array-like, shape = (n_samples, n_features)
@@ -195,12 +199,12 @@ def predict(model, X, joint_contribution=False):
     if model.n_outputs_ > 1:
         raise ValueError("Multilabel classification trees not supported")
 
-    if (type(model) == DecisionTreeRegressor or
-        type(model) == DecisionTreeClassifier):
+    if (isinstance(model, DecisionTreeClassifier) or
+        isinstance(model, DecisionTreeRegressor)):
         return _predict_tree(model, X, joint_contribution=joint_contribution)
-    elif (type(model) == RandomForestRegressor or
-          type(model) == RandomForestClassifier):
+    elif (isinstance(model, ForestClassifier) or
+          isinstance(model, ForestRegressor)):
         return _predict_forest(model, X, joint_contribution=joint_contribution)
     else:
-        raise ValueError("Wrong model type. Base learner needs to be \
-            DecisionTreeClassifier or DecisionTreeRegressor.")
+        raise ValueError("Wrong model type. Base learner needs to be a "
+                         "DecisionTreeClassifier or DecisionTreeRegressor.")
