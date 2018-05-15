@@ -52,7 +52,7 @@ def _predict_tree(model, X, joint_contribution=False):
         leaf_to_path[path[-1]] = path         
     
     # remove the single-dimensional inner arrays
-    values = model.tree_.value.squeeze()
+    values = model.tree_.value.squeeze(axis=1)
     # reshape if squeezed into a single float
     if len(values.shape) == 0:
         values = np.array([values])
