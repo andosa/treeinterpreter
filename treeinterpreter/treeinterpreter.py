@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import sklearn
-
+from collections import Counter
 from sklearn.ensemble.forest import ForestClassifier, ForestRegressor
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
 from distutils.version import LooseVersion
@@ -38,7 +38,7 @@ def _predict_tree(model, X, joint_contribution=False):
     For a given DecisionTreeRegressor, DecisionTreeClassifier,
     ExtraTreeRegressor, or ExtraTreeClassifier,
     returns a triple of [prediction, bias and feature_contributions], such
-    that prediction ≈ bias + feature_contributions.
+    that prediction â‰ˆ bias + feature_contributions.
     """
     leaves = model.apply(X)
     paths = _get_tree_paths(model.tree_, 0)
@@ -114,11 +114,11 @@ def _predict_tree(model, X, joint_contribution=False):
         return direct_prediction, biases, np.array(contributions)
 
 
-def _predict_forest(model, X, joint_contribution=False):
+def _predict_forest(model, X, joint_contribution=False, aggregated_contributions=False):
     """
     For a given RandomForestRegressor, RandomForestClassifier,
     ExtraTreesRegressor, or ExtraTreesClassifier returns a triple of
-    [prediction, bias and feature_contributions], such that prediction ≈ bias +
+    [prediction, bias and feature_contributions], such that prediction â‰ˆ bias +
     feature_contributions.
     """
     biases = []
@@ -128,27 +128,48 @@ def _predict_forest(model, X, joint_contribution=False):
     
     if joint_contribution:
         
-        for tree in model.estimators_:
-            pred, bias, contribution = _predict_tree(tree, X, joint_contribution=joint_contribution)
-
-            biases.append(bias)
-            contributions.append(contribution)
-            predictions.append(pred)
-        
-        
-        total_contributions = []
-        
-        for i in range(len(X)):
-            contr = {}
-            for j, dct in enumerate(contributions):
-                for k in set(dct[i]).union(set(contr.keys())):
-                    contr[k] = (contr.get(k, 0)*j + dct[i].get(k,0) ) / (j+1)
-
-            total_contributions.append(contr)    
+        # If user wants the contributions outputed to be already aggregated run this section. It uses Counter from 
+        # collections to automatically sum all contributions and divide by number of trees.
+        if aggregated_contributions:
             
-        for i, item in enumerate(contribution):
-            total_contributions[i]
-            sm = sum([v for v in contribution[i].values()])
+            total_contributions = Counter()
+
+            for tree in model.estimators_:
+                pred, bias, contribution = _predict_tree(tree, X, joint_contribution=joint_contribution)
+
+                biases.append(bias)
+                predictions.append(pred)
+                for dct in contribution: 
+                    total_contributions.update(dct)
+
+            # Total Contributions already aggregated. 
+            total_contributions = {x: total_contributions[x]/len(X) for x in total_contributions.keys()}
+
+
+            
+            
+        else:
+            for tree in model.estimators_:
+                pred, bias, contribution = _predict_tree(tree, X, joint_contribution=joint_contribution)
+
+                biases.append(bias)
+                contributions.append(contribution)
+                predictions.append(pred)
+
+
+            total_contributions = []
+
+            for i in range(len(X)):
+                contr = {}
+                for j, dct in enumerate(contributions):
+                    for k in set(dct[i]).union(set(contr.keys())):
+                        contr[k] = (contr.get(k, 0)*j + dct[i].get(k,0) ) / (j+1)
+
+                total_contributions.append(contr)    
+
+            for i, item in enumerate(contribution):
+                total_contributions[i]
+                sm = sum([v for v in contribution[i].values()])
                 
 
         
@@ -167,9 +188,9 @@ def _predict_forest(model, X, joint_contribution=False):
             np.mean(contributions, axis=0))
 
 
-def predict(model, X, joint_contribution=False):
+def predict(model, X, joint_contribution=False, aggregated_contributions=False):
     """ Returns a triple (prediction, bias, feature_contributions), such
-    that prediction ≈ bias + feature_contributions.
+    that prediction â‰ˆ bias + feature_contributions.
     Parameters
     ----------
     model : DecisionTreeRegressor, DecisionTreeClassifier,
@@ -184,6 +205,10 @@ def predict(model, X, joint_contribution=False):
     joint_contribution : boolean
     Specifies if contributions are given individually from each feature,
     or jointly over them
+    
+    aggregated_contributions : boolean
+    Specifies if contributions are the aggregated contribution of all the 
+    data samples. 
 
     Returns
     -------
@@ -199,6 +224,9 @@ def predict(model, X, joint_contribution=False):
         If joint_contribution is True, then shape is array of size n_samples,
         where each array element is a dict from a tuple of feature indices to
         to a value denoting the contribution from that feature tuple.
+        If aggregated_contributions is False then nothing changes. 
+        If aggregated_contributions is True then contributions is a dictionary 
+        of the average contribution across all samples. 
     """
     # Only single out response variable supported,
     if model.n_outputs_ > 1:
@@ -209,7 +237,7 @@ def predict(model, X, joint_contribution=False):
         return _predict_tree(model, X, joint_contribution=joint_contribution)
     elif (isinstance(model, ForestClassifier) or
           isinstance(model, ForestRegressor)):
-        return _predict_forest(model, X, joint_contribution=joint_contribution)
+        return _predict_forest(model, X, joint_contribution=joint_contribution, aggregated_contributions=aggregated_contributions)
     else:
         raise ValueError("Wrong model type. Base learner needs to be a "
                          "DecisionTreeClassifier or DecisionTreeRegressor.")

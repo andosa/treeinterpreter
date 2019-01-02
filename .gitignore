@@ -3,6 +3,7 @@
 # C extensions
 *.so
 
+
 # Packages
 *.egg
 *.egg-info
@@ -41,3 +42,6 @@ output/*/index.html
 
 # Sphinx
 docs/_build
+
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
