@@ -114,6 +114,18 @@ def _predict_tree(model, X, joint_contribution=False):
         return direct_prediction, biases, np.array(contributions)
 
 
+def _iterative_mean(iter, current_mean, x):
+    """
+    Iteratively calculates mean using
+    http://www.heikohoffmann.de/htmlthesis/node134.html
+    :param iter: non-negative integer, iteration
+    :param current_mean: numpy array, current value of mean
+    :param x: numpy array, new value to be added to mean
+    :return: numpy array, updated mean
+    """
+    return current_mean + ((x - current_mean) / (iter + 1))
+
+
 def _predict_forest(model, X, joint_contribution=False):
     """
     For a given RandomForestRegressor, RandomForestClassifier,
@@ -121,12 +133,11 @@ def _predict_forest(model, X, joint_contribution=False):
     [prediction, bias and feature_contributions], such that prediction ≈ bias +
     feature_contributions.
     """
-    biases = []
-    contributions = []
-    predictions = []
 
-    
     if joint_contribution:
+        biases = []
+        contributions = []
+        predictions = []
         
         for tree in model.estimators_:
             pred, bias, contribution = _predict_tree(tree, X, joint_contribution=joint_contribution)
@@ -155,16 +166,23 @@ def _predict_forest(model, X, joint_contribution=False):
         return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
             total_contributions)
     else:
-        for tree in model.estimators_:
+        mean_pred = None
+        mean_bias = None
+        mean_contribution = None
+
+        for i, tree in enumerate(model.estimators_):
             pred, bias, contribution = _predict_tree(tree, X)
 
-            biases.append(bias)
-            contributions.append(contribution)
-            predictions.append(pred)
-        
-        
-        return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
-            np.mean(contributions, axis=0))
+            if i < 1: # first iteration
+                mean_bias = bias
+                mean_contribution = contribution
+                mean_pred = pred
+            else:
+                mean_bias = _iterative_mean(i, mean_bias, bias)
+                mean_contribution = _iterative_mean(i, mean_contribution, contribution)
+                mean_pred = _iterative_mean(i, mean_pred, pred)
+
+        return mean_pred, mean_bias, mean_contribution
 
 
 def predict(model, X, joint_contribution=False):
