@@ -1,0 +1,19 @@
+Please use one of the following samples to cite the treeinterpreter version
+(change x.y to the version you are using) from this installation.
+
+Text:
+
+[treeinterpreter]  treeinterpreter x.y, 2019
+Ando Saabas, https://github.com/andosa/treeinterpreter
+
+BibTeX:
+
+@misc{treeinterpreterx.y,
+  title = {treeinterpreter x.y},
+  author = {Ando Saabas},
+  year = {2019},
+  howpublished = {\href{https://github.com/andosa/treeinterpreter}{\texttt{https://github.com/andosa/treeinterpreter}}},
+}
+
+If you are unsure about which version of treeinterpreter you are using run:
+`pip show treeinterpreter` for the Python version.
