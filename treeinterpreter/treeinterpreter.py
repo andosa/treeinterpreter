@@ -2,7 +2,7 @@
 import numpy as np
 import sklearn
 
-from sklearn.ensemble import ForestClassifier, ForestRegressor
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, RandomForestRegressor, ExtraTreesRegressor
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
 from distutils.version import LooseVersion
 if LooseVersion(sklearn.__version__) < LooseVersion("0.17"):
@@ -225,8 +225,10 @@ def predict(model, X, joint_contribution=False):
     if (isinstance(model, DecisionTreeClassifier) or
         isinstance(model, DecisionTreeRegressor)):
         return _predict_tree(model, X, joint_contribution=joint_contribution)
-    elif (isinstance(model, ForestClassifier) or
-          isinstance(model, ForestRegressor)):
+    elif (isinstance(model, RandomForestClassifier) or
+          isinstance(model, ExtraTreesClassifier) or
+          isinstance(model, RandomForestRegressor) or
+          isinstance(model, ExtraTreesRegressor)):
         return _predict_forest(model, X, joint_contribution=joint_contribution)
     else:
         raise ValueError("Wrong model type. Base learner needs to be a "
