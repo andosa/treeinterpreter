@@ -15,7 +15,8 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read().replace('.. :changelog:', '')
 
 requirements = [
-    # TODO: put package requirements here
+    "numpy", 
+    "scikit-learn>=0.17"
 ]
 
 test_requirements = [
