@@ -57,6 +57,8 @@ def _predict_tree(model, X, joint_contribution=False):
     if len(values.shape) == 0:
         values = np.array([values])
     if isinstance(model, DecisionTreeRegressor):
+        # we require the values to be the same shape as the biases
+        values = values.squeeze(axis=1)
         biases = np.full(X.shape[0], values[paths[0][0]])
         line_shape = X.shape[1]
     elif isinstance(model, DecisionTreeClassifier):
