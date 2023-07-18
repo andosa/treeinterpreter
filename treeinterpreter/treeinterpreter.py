@@ -47,10 +47,10 @@ def _predict_tree(model, X, joint_contribution=False):
         path.reverse()
 
     leaf_to_path = {}
-    #map leaves to paths
+    # map leaves to paths
     for path in paths:
-        leaf_to_path[path[-1]] = path         
-    
+        leaf_to_path[path[-1]] = path
+
     # remove the single-dimensional inner arrays
     values = model.tree_.value.squeeze(axis=1)
     # reshape if squeezed into a single float
@@ -70,62 +70,46 @@ def _predict_tree(model, X, joint_contribution=False):
         biases = np.tile(values[paths[0][0]], (X.shape[0], 1))
         line_shape = (X.shape[1], model.n_classes_)
     direct_prediction = values[leaves]
-    
-    
-    #make into python list, accessing values will be faster
+
+    # make into python list, accessing values will be faster
     values_list = list(values)
     feature_index = list(model.tree_.feature)
-    
-    contributions = []
+
     if joint_contribution:
+        contributions = []
         for row, leaf in enumerate(leaves):
             path = leaf_to_path[leaf]
-            
-            
+
             path_features = set()
             contributions.append({})
             for i in range(len(path) - 1):
                 path_features.add(feature_index[path[i]])
                 contrib = values_list[path[i+1]] - \
-                         values_list[path[i]]
-                #path_features.sort()
+                    values_list[path[i]]
+                # path_features.sort()
                 contributions[row][tuple(sorted(path_features))] = \
-                    contributions[row].get(tuple(sorted(path_features)), 0) + contrib
+                    contributions[row].get(
+                        tuple(sorted(path_features)), 0) + contrib
         return direct_prediction, biases, contributions
-        
+
     else:
         unique_leaves = np.unique(leaves)
-        unique_contributions = {}
-        
+        contributions = np.zeros([len(leaves), X.shape[1], values.shape[1]])
+
         for row, leaf in enumerate(unique_leaves):
             for path in paths:
                 if leaf == path[-1]:
                     break
-            
+
             contribs = np.zeros(line_shape)
             for i in range(len(path) - 1):
-                
+
                 contrib = values_list[path[i+1]] - \
-                         values_list[path[i]]
+                    values_list[path[i]]
                 contribs[feature_index[path[i]]] += contrib
-            unique_contributions[leaf] = contribs
-            
-        for row, leaf in enumerate(leaves):
-            contributions.append(unique_contributions[leaf])
+            contributions[leaves == leaf, ...] = contribs
 
-        return direct_prediction, biases, np.array(contributions)
-
-
-def _iterative_mean(iter, current_mean, x):
-    """
-    Iteratively calculates mean using
-    http://www.heikohoffmann.de/htmlthesis/node134.html
-    :param iter: non-negative integer, iteration
-    :param current_mean: numpy array, current value of mean
-    :param x: numpy array, new value to be added to mean
-    :return: numpy array, updated mean
-    """
-    return current_mean + ((x - current_mean) / (iter + 1))
+        return direct_prediction, biases, contributions
 
 
 def _predict_forest(model, X, joint_contribution=False):
@@ -140,50 +124,46 @@ def _predict_forest(model, X, joint_contribution=False):
         biases = []
         contributions = []
         predictions = []
-        
+
         for tree in model.estimators_:
-            pred, bias, contribution = _predict_tree(tree, X, joint_contribution=joint_contribution)
+            pred, bias, contribution = _predict_tree(
+                tree, X, joint_contribution=joint_contribution)
 
             biases.append(bias)
             contributions.append(contribution)
             predictions.append(pred)
-        
-        
+
         total_contributions = []
-        
+
         for i in range(len(X)):
             contr = {}
             for j, dct in enumerate(contributions):
                 for k in set(dct[i]).union(set(contr.keys())):
-                    contr[k] = (contr.get(k, 0)*j + dct[i].get(k,0) ) / (j+1)
+                    contr[k] = (contr.get(k, 0)*j + dct[i].get(k, 0)) / (j+1)
 
-            total_contributions.append(contr)    
-            
+            total_contributions.append(contr)
+
         for i, item in enumerate(contribution):
             total_contributions[i]
             sm = sum([v for v in contribution[i].values()])
-                
 
-        
         return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
-            total_contributions)
+                total_contributions)
     else:
-        mean_pred = None
-        mean_bias = None
-        mean_contribution = None
+        mean_pred = 0.0
+        mean_bias = 0.0
+        mean_contribution = 0.0
 
         for i, tree in enumerate(model.estimators_):
             pred, bias, contribution = _predict_tree(tree, X)
 
-            if i < 1: # first iteration
-                mean_bias = bias
-                mean_contribution = contribution
-                mean_pred = pred
-            else:
-                mean_bias = _iterative_mean(i, mean_bias, bias)
-                mean_contribution = _iterative_mean(i, mean_contribution, contribution)
-                mean_pred = _iterative_mean(i, mean_pred, pred)
+            mean_pred += pred
+            mean_bias += bias
+            mean_contribution += contribution
 
+        mean_pred /= len(model.estimators_)
+        mean_bias /= len(model.estimators_)
+        mean_contribution /= len(model.estimators_)
         return mean_pred, mean_bias, mean_contribution
 
 
@@ -200,7 +180,7 @@ def predict(model, X, joint_contribution=False):
 
     X : array-like, shape = (n_samples, n_features)
     Test samples.
-    
+
     joint_contribution : boolean
     Specifies if contributions are given individually from each feature,
     or jointly over them
