@@ -7,6 +7,7 @@ from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, _tree
 from distutils.version import LooseVersion
 if LooseVersion(sklearn.__version__) < LooseVersion("0.17"):
     raise Exception("treeinterpreter requires scikit-learn 0.17 or later")
+from concurrent.futures import ThreadPoolExecutor
 
 
 def _get_tree_paths(tree, node_id, depth=0):
@@ -134,7 +135,9 @@ class Treeinterpreter():
                     contribs[feature_index[path[i]]] += contrib
                 contributions[leaves == leaf, ...] = contribs
 
-            return direct_prediction, biases, contributions
+            self.mean_pred += direct_prediction
+            self.mean_bias += biases
+            self.mean_contribution += contributions
 
     def _predict_forest(self):
         """
@@ -174,21 +177,17 @@ class Treeinterpreter():
             return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
                     total_contributions)
         else:
-            mean_pred = 0.0
-            mean_bias = 0.0
-            mean_contribution = 0.0
+            self.mean_pred = 0.0
+            self.mean_bias = 0.0
+            self.mean_contribution = 0.0
 
-            for i, tree in enumerate(self.model.estimators_):
-                pred, bias, contribution = self._predict_tree(tree)
+            with ThreadPoolExecutor(10) as pool:
+                pool.map(self._predict_tree, self.model.estimators_)
 
-                mean_pred += pred
-                mean_bias += bias
-                mean_contribution += contribution
-
-            mean_pred /= len(self.model.estimators_)
-            mean_bias /= len(self.model.estimators_)
-            mean_contribution /= len(self.model.estimators_)
-            return mean_pred, mean_bias, mean_contribution
+            self.mean_pred /= len(self.model.estimators_)
+            self.mean_bias /= len(self.model.estimators_)
+            self.mean_contribution /= len(self.model.estimators_)
+            return self.mean_pred, self.mean_bias, self.mean_contribution
 
     def predict(self):
         """ Returns a triple (prediction, bias, feature_contributions), such
