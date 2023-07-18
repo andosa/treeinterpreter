@@ -76,8 +76,8 @@ def _predict_tree(model, X, joint_contribution=False):
     values_list = list(values)
     feature_index = list(model.tree_.feature)
     
-    contributions = []
     if joint_contribution:
+        contributions = []
         for row, leaf in enumerate(leaves):
             path = leaf_to_path[leaf]
             
@@ -95,7 +95,7 @@ def _predict_tree(model, X, joint_contribution=False):
         
     else:
         unique_leaves = np.unique(leaves)
-        unique_contributions = {}
+        contributions = np.zeros([len(leaves), X.shape[1], values.shape[1]])
         
         for row, leaf in enumerate(unique_leaves):
             for path in paths:
@@ -108,24 +108,9 @@ def _predict_tree(model, X, joint_contribution=False):
                 contrib = values_list[path[i+1]] - \
                          values_list[path[i]]
                 contribs[feature_index[path[i]]] += contrib
-            unique_contributions[leaf] = contribs
-            
-        for row, leaf in enumerate(leaves):
-            contributions.append(unique_contributions[leaf])
+            contributions[leaves == leaf, ...] = contribs
 
-        return direct_prediction, biases, np.array(contributions)
-
-
-def _iterative_mean(iter, current_mean, x):
-    """
-    Iteratively calculates mean using
-    http://www.heikohoffmann.de/htmlthesis/node134.html
-    :param iter: non-negative integer, iteration
-    :param current_mean: numpy array, current value of mean
-    :param x: numpy array, new value to be added to mean
-    :return: numpy array, updated mean
-    """
-    return current_mean + ((x - current_mean) / (iter + 1))
+        return direct_prediction, biases, contributions
 
 
 def _predict_forest(model, X, joint_contribution=False):
@@ -168,22 +153,20 @@ def _predict_forest(model, X, joint_contribution=False):
         return (np.mean(predictions, axis=0), np.mean(biases, axis=0),
             total_contributions)
     else:
-        mean_pred = None
-        mean_bias = None
-        mean_contribution = None
+        mean_pred = 0.0
+        mean_bias = 0.0
+        mean_contribution = 0.0
 
         for i, tree in enumerate(model.estimators_):
             pred, bias, contribution = _predict_tree(tree, X)
 
-            if i < 1: # first iteration
-                mean_bias = bias
-                mean_contribution = contribution
-                mean_pred = pred
-            else:
-                mean_bias = _iterative_mean(i, mean_bias, bias)
-                mean_contribution = _iterative_mean(i, mean_contribution, contribution)
-                mean_pred = _iterative_mean(i, mean_pred, pred)
+            mean_pred += pred
+            mean_bias += bias
+            mean_contribution += contribution
 
+        mean_pred /= len(model.estimators_)
+        mean_bias /= len(model.estimators_)
+        mean_contribution /= len(model.estimators_)
         return mean_pred, mean_bias, mean_contribution
 
 
